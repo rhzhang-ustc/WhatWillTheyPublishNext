@@ -589,6 +589,20 @@
         return { id: (top.id || '').split('/').pop() || null, name: top.display_name || null };
     }
 
+    function nameTokens(s) {
+        return (s || '').toLowerCase()
+            .replace(/[.,]/g, ' ')
+            .split(/\s+/)
+            .filter(t => t.length >= 2);
+    }
+    function nameMatches(query, candidateName) {
+        const qTokens = nameTokens(query);
+        if (!qTokens.length) return true;
+        const cTokens = new Set(nameTokens(candidateName));
+        // Require ALL meaningful query tokens (≥2 chars) to appear in candidate
+        return qTokens.every(t => cTokens.has(t));
+    }
+
     async function fetchAuthorTitlesDirect(name, affiliation) {
         const { id: instId, name: instName } = await resolveInstitution(affiliation);
         const affLower = (affiliation || '').toLowerCase();
@@ -597,9 +611,16 @@
         const candidates = (await aresp.json()).results || [];
         if (!candidates.length) return null;
 
+        // Restrict to candidates whose name actually matches the query.
+        // OpenAlex's search is fuzzy and can return high-citation strangers
+        // in the long tail — without this filter, ranking by citations
+        // can pick the wrong person entirely.
+        const nameMatched = candidates.filter(c => nameMatches(name, c.display_name));
+        const pool = nameMatched.length ? nameMatched : candidates;
+
         let author;
         if (affiliation) {
-            const matches = candidates.filter(c => {
+            const matches = pool.filter(c => {
                 const insts = c.last_known_institutions || [];
                 if (instId && insts.some(i => (i.id || '').split('/').pop() === instId)) return true;
                 if (affLower && insts.some(i => (i.display_name || '').toLowerCase().includes(affLower))) return true;
@@ -607,9 +628,9 @@
             });
             author = matches.length
                 ? matches.reduce((a, b) => (b.works_count || 0) > (a.works_count || 0) ? b : a)
-                : candidates.reduce((a, b) => (b.cited_by_count || 0) > (a.cited_by_count || 0) ? b : a);
+                : pool.reduce((a, b) => (b.cited_by_count || 0) > (a.cited_by_count || 0) ? b : a);
         } else {
-            author = candidates.reduce((a, b) => (b.cited_by_count || 0) > (a.cited_by_count || 0) ? b : a);
+            author = pool.reduce((a, b) => (b.cited_by_count || 0) > (a.cited_by_count || 0) ? b : a);
         }
 
         const authorId = (author.id || '').split('/').pop();
