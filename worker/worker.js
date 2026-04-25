@@ -14,6 +14,31 @@
 
 const CACHE_TTL_SECONDS = 5 * 24 * 60 * 60; // 5 days
 const OPENALEX_BASE = "https://api.openalex.org";
+// Identifying ourselves puts us in OpenAlex's "polite pool" with higher
+// rate limits — important since Worker IPs are shared with many users.
+const OPENALEX_MAILTO = "ruohanzhang15@gmail.com";
+
+async function openalexFetch(path, params = {}) {
+    const u = new URL(`${OPENALEX_BASE}${path}`);
+    for (const [k, v] of Object.entries(params)) {
+        if (v != null) u.searchParams.set(k, v);
+    }
+    u.searchParams.set("mailto", OPENALEX_MAILTO);
+
+    // Small retry on 429 with backoff
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const r = await fetch(u.toString(), {
+            headers: { "User-Agent": `WhatWillTheyPublishNext (mailto:${OPENALEX_MAILTO})` },
+        });
+        if (r.status !== 429) return r;
+        const retryAfter = parseInt(r.headers.get("Retry-After") || "1", 10);
+        await new Promise(res => setTimeout(res, Math.min(retryAfter, 5) * 1000));
+    }
+    // Fall through with a final attempt (returns whatever status it has)
+    return fetch(u.toString(), {
+        headers: { "User-Agent": `WhatWillTheyPublishNext (mailto:${OPENALEX_MAILTO})` },
+    });
+}
 
 const corsHeaders = (origin) => ({
     "Access-Control-Allow-Origin": origin,
@@ -40,9 +65,7 @@ function jsonResponse(status, payload, origin) {
 async function resolveInstitution(affiliation) {
     if (!affiliation) return { id: null, name: null };
     try {
-        const r = await fetch(
-            `${OPENALEX_BASE}/institutions?search=${encodeURIComponent(affiliation)}&per-page=1`,
-        );
+        const r = await openalexFetch("/institutions", { search: affiliation, "per-page": 1 });
         if (!r.ok) return { id: null, name: null };
         const j = await r.json();
         const top = (j.results || [])[0];
@@ -57,9 +80,7 @@ async function fetchAuthorTitles(name, affiliation) {
     const { id: instId, name: instName } = await resolveInstitution(affiliation);
     const affLower = (affiliation || "").toLowerCase();
 
-    const aresp = await fetch(
-        `${OPENALEX_BASE}/authors?search=${encodeURIComponent(name)}&per-page=10`,
-    );
+    const aresp = await openalexFetch("/authors", { search: name, "per-page": 10 });
     if (!aresp.ok) throw new Error(`OpenAlex author search failed: ${aresp.status}`);
     const adata = await aresp.json();
     const candidates = adata.results || [];
@@ -85,10 +106,12 @@ async function fetchAuthorTitles(name, affiliation) {
     const insts = author.last_known_institutions || [];
     const authorAff = insts.map(i => i.display_name).filter(Boolean).join(", ") || null;
 
-    const wresp = await fetch(
-        `${OPENALEX_BASE}/works?filter=author.id:${authorId}` +
-        `&per-page=200&select=title,type,authorships,cited_by_count&sort=cited_by_count:desc`,
-    );
+    const wresp = await openalexFetch("/works", {
+        filter: `author.id:${authorId}`,
+        "per-page": 200,
+        select: "title,type,authorships,cited_by_count",
+        sort: "cited_by_count:desc",
+    });
     if (!wresp.ok) throw new Error(`OpenAlex works fetch failed: ${wresp.status}`);
     const wdata = await wresp.json();
     const works = wdata.results || [];
