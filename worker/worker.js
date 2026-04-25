@@ -261,14 +261,45 @@ OTHER RULES:
 
 // ===== Main handler =====
 
-async function handleAuthor(url, env, origin) {
+// GET /api/author?name=X[&affiliation=Y]: cache-only check.
+// Returns the cached result if present, otherwise 404 with `needsTitles: true`.
+// The frontend then fetches OpenAlex itself (from the user's IP, which avoids
+// the rate-limit hammer that Cloudflare egress IPs catch) and re-posts.
+async function handleAuthorGet(url, env, origin) {
     const name = (url.searchParams.get("name") || "").trim();
     const affiliation = (url.searchParams.get("affiliation") || "").trim();
     if (!name) return jsonResponse(400, { error: "name parameter required" }, origin);
 
     const cacheKey = (name + "|" + affiliation).toLowerCase();
+    if (env.AUTHOR_CACHE) {
+        const cached = await env.AUTHOR_CACHE.get(cacheKey, { type: "json" });
+        if (cached) {
+            return new Response(JSON.stringify({ ...cached, cached: true }), {
+                status: 200,
+                headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+            });
+        }
+    }
+    return jsonResponse(404, { error: "cache miss", needsTitles: true }, origin);
+}
 
-    // Check KV cache
+// POST /api/author with body {name, affiliation, titles, openalexName?, openalexAffiliation?}
+// Frontend supplies titles fetched from OpenAlex (browser-side, polite pool).
+// Worker calls GPT to extract word banks, caches by (name|affiliation), returns.
+async function handleAuthorPost(request, env, origin) {
+    let body;
+    try { body = await request.json(); }
+    catch { return jsonResponse(400, { error: "Invalid JSON body" }, origin); }
+
+    const name = (body.name || "").trim();
+    const affiliation = (body.affiliation || "").trim();
+    const titles = Array.isArray(body.titles) ? body.titles.filter(t => typeof t === "string") : [];
+    if (!name) return jsonResponse(400, { error: "name required" }, origin);
+    if (!titles.length) return jsonResponse(400, { error: "titles required" }, origin);
+
+    const cacheKey = (name + "|" + affiliation).toLowerCase();
+
+    // Cache check (caller may not have done one)
     if (env.AUTHOR_CACHE) {
         const cached = await env.AUTHOR_CACHE.get(cacheKey, { type: "json" });
         if (cached) {
@@ -279,20 +310,9 @@ async function handleAuthor(url, env, origin) {
         }
     }
 
-    // Fetch papers
-    let openalex;
-    try {
-        openalex = await fetchAuthorTitles(name, affiliation);
-    } catch (e) {
-        return jsonResponse(502, { error: `OpenAlex error: ${e.message}` }, origin);
-    }
-    if (!openalex) return jsonResponse(404, { error: `Author "${name}" not found` }, origin);
-    if (!openalex.titles.length) return jsonResponse(404, { error: `No papers found for "${openalex.name}"` }, origin);
-
-    // Extract word banks
     let wordBanks;
     try {
-        wordBanks = await gptExtract(openalex.titles, env);
+        wordBanks = await gptExtract(titles, env);
     } catch (e) {
         return jsonResponse(502, { error: `GPT error: ${e.message}` }, origin);
     }
@@ -301,22 +321,19 @@ async function handleAuthor(url, env, origin) {
     }
 
     const result = {
-        name: openalex.name,
-        affiliation: openalex.affiliation,
-        titles: openalex.titles,
+        name: body.openalexName || name,
+        affiliation: body.openalexAffiliation || affiliation || null,
+        titles,
         wordBanks,
         timestamp: new Date().toISOString(),
     };
 
-    // Cache (5-day TTL)
     if (env.AUTHOR_CACHE) {
         try {
             await env.AUTHOR_CACHE.put(cacheKey, JSON.stringify(result), {
                 expirationTtl: CACHE_TTL_SECONDS,
             });
-        } catch {
-            // best-effort caching; ignore failures
-        }
+        } catch { /* best-effort */ }
     }
 
     return new Response(JSON.stringify(result), {
@@ -345,8 +362,9 @@ export default {
             return jsonResponse(500, { error: "Worker missing OPENAI_API_KEY secret" }, origin);
         }
 
-        if (request.method === "GET" && url.pathname === "/api/author") {
-            return handleAuthor(url, env, origin);
+        if (url.pathname === "/api/author") {
+            if (request.method === "GET") return handleAuthorGet(url, env, origin);
+            if (request.method === "POST") return handleAuthorPost(request, env, origin);
         }
 
         return new Response("Not found", { status: 404, headers: corsHeaders(origin) });

@@ -564,14 +564,24 @@
     // via local config.local.js — bypasses the Worker for local dev) =====
 
     const OPENALEX_BASE = 'https://api.openalex.org';
+    const OPENALEX_MAILTO = 'rhzhang-ustc.github.io';
 
     function getApiKey() {
         return (typeof window !== 'undefined' && window.OPENAI_API_KEY) || '';
     }
 
+    function openalexUrl(path, params = {}) {
+        const u = new URL(OPENALEX_BASE + path);
+        for (const [k, v] of Object.entries(params)) {
+            if (v != null) u.searchParams.set(k, v);
+        }
+        u.searchParams.set('mailto', OPENALEX_MAILTO);
+        return u.toString();
+    }
+
     async function resolveInstitution(affiliation) {
         if (!affiliation) return { id: null, name: null };
-        const r = await fetch(`${OPENALEX_BASE}/institutions?search=${encodeURIComponent(affiliation)}&per-page=1`);
+        const r = await fetch(openalexUrl('/institutions', { search: affiliation, 'per-page': 1 }));
         if (!r.ok) return { id: null, name: null };
         const j = await r.json();
         const top = (j.results || [])[0];
@@ -582,7 +592,7 @@
     async function fetchAuthorTitlesDirect(name, affiliation) {
         const { id: instId, name: instName } = await resolveInstitution(affiliation);
         const affLower = (affiliation || '').toLowerCase();
-        const aresp = await fetch(`${OPENALEX_BASE}/authors?search=${encodeURIComponent(name)}&per-page=10`);
+        const aresp = await fetch(openalexUrl('/authors', { search: name, 'per-page': 10 }));
         if (!aresp.ok) throw new Error(`OpenAlex author search failed: ${aresp.status}`);
         const candidates = (await aresp.json()).results || [];
         if (!candidates.length) return null;
@@ -607,8 +617,12 @@
         const insts = author.last_known_institutions || [];
         const authorAff = insts.map(i => i.display_name).filter(Boolean).join(', ') || null;
 
-        const wresp = await fetch(`${OPENALEX_BASE}/works?filter=author.id:${authorId}` +
-            `&per-page=200&select=title,type,authorships,cited_by_count&sort=cited_by_count:desc`);
+        const wresp = await fetch(openalexUrl('/works', {
+            filter: `author.id:${authorId}`,
+            'per-page': 200,
+            select: 'title,type,authorships,cited_by_count',
+            sort: 'cited_by_count:desc',
+        }));
         if (!wresp.ok) throw new Error(`OpenAlex works fetch failed: ${wresp.status}`);
         const works = (await wresp.json()).results || [];
 
@@ -780,12 +794,35 @@ OTHER RULES:
                 }
                 data = { name: r.name, affiliation: r.affiliation, titles: r.titles, wordBanks };
             } else {
-                // Worker path: shared backend handles OpenAlex + OpenAI + caching
-                const url = `${WORKER_URL}/api/author?name=${encodeURIComponent(name)}` +
+                // 1) Try Worker cache first (no OpenAlex/OpenAI cost on hit)
+                const checkUrl = `${WORKER_URL}/api/author?name=${encodeURIComponent(name)}` +
                     (affiliation ? `&affiliation=${encodeURIComponent(affiliation)}` : '');
-                const resp = await fetch(url);
-                data = await resp.json();
-                if (!resp.ok) throw new Error(data.error || `Worker error: ${resp.status}`);
+                const checkResp = await fetch(checkUrl);
+                if (checkResp.ok) {
+                    data = await checkResp.json();
+                } else {
+                    // 2) Cache miss — fetch OpenAlex from browser (avoids CF rate-limit)
+                    btnFetch.textContent = 'Searching OpenAlex...';
+                    const r = await fetchAuthorTitlesDirect(name, affiliation);
+                    if (!r) throw new Error(`Author "${name}" not found on OpenAlex`);
+                    if (!r.titles.length) throw new Error(`No papers found for "${r.name}"`);
+
+                    // 3) POST titles to Worker for GPT extraction + caching
+                    btnFetch.textContent = 'Asking GPT...';
+                    const postResp = await fetch(`${WORKER_URL}/api/author`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name,
+                            affiliation,
+                            titles: r.titles,
+                            openalexName: r.name,
+                            openalexAffiliation: r.affiliation,
+                        }),
+                    });
+                    data = await postResp.json();
+                    if (!postResp.ok) throw new Error(data.error || `Worker error: ${postResp.status}`);
+                }
             }
 
             authorWordBanks = data.wordBanks;
