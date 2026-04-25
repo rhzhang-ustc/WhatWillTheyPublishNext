@@ -15,4 +15,4 @@ ALLOWED_ORIGINS = "https://rhzhang-ustc.github.io,http://localhost:5000,http://l
 # then paste the returned id here.
 [[kv_namespaces]]
 binding = "AUTHOR_CACHE"
-id = "a20b561587cf48619a2dae7ca477f922"
+id = "b125b029ca42475b922b7ed532a05009"
