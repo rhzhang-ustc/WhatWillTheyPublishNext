@@ -1,0 +1,11 @@
+name = "what-will-they-publish-next"
+main = "worker.js"
+compatibility_date = "2026-04-25"
+
+# Comma-separated list of origins allowed to hit the Worker.
+# Update after enabling GitHub Pages and your custom domain (if any).
+[vars]
+ALLOWED_ORIGINS = "https://rhzhang-ustc.github.io,http://localhost:5000,http://localhost:8000"
+
+# Set the OpenAI key as a secret (NOT committed):
+#   wrangler secret put OPENAI_API_KEY

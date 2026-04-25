@@ -358,10 +358,11 @@
 
 <div class="settings-modal" id="settings-modal">
     <div class="settings-modal-content">
-        <h3>OpenAI API key</h3>
-        <p>This app calls the OpenAI API directly from your browser.
-        Your key is stored only in this browser's <code>localStorage</code> and
-        is never sent anywhere except to OpenAI itself.
+        <h3>OpenAI API key (optional)</h3>
+        <p>By default this app uses a shared backend, so you don't need
+        a key. If you'd rather use <strong>your own</strong> key (no rate limits,
+        better privacy), paste it here. It's stored only in this browser's
+        <code>localStorage</code> and goes directly to OpenAI.
         <br><br>Get a key from
         <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>.</p>
         <input type="password" id="settings-key" placeholder="sk-..." autocomplete="off">
@@ -443,6 +444,13 @@
 
 <script>
 (function () {
+    // ===== CONFIG =====
+    // After deploying the Cloudflare Worker (see worker/README.md), set
+    // this to its URL so visitors can use the app without their own key.
+    // Leave as null to require visitors to provide their own OpenAI key.
+    const WORKER_URL = null;
+    // Example: const WORKER_URL = "https://what-will-they-publish-next.your-handle.workers.dev";
+
     // Title patterns (kept locally — these are structure, not data)
     const patterns = [
         'LEARNINGVARIANT LEARNINGMETHODS for TASKPREVARIANT TASK in APPLICATION TASKPOSTVARIANT',
@@ -748,7 +756,7 @@
             localStorage.getItem('openai_api_key') || '';
     }
 
-    async function gptExtract(titles, apiKey) {
+    async function gptExtract(titles, userApiKey) {
         const titlesText = titles.slice(0, 100).map(t => '- ' + t).join('\n');
         const prompt = `You are analyzing paper titles from a researcher. Extract research terms structured for use as building blocks in a paper-title generator.
 
@@ -792,19 +800,35 @@ OTHER RULES:
 - Keys in taskprevariant/taskpostvariant must EXACTLY match entries in "task".
 - Return valid JSON only, no markdown fences.`;
 
-        const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + apiKey,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [{ role: 'user', content: prompt }],
-                temperature: 0.6,
-                response_format: { type: 'json_object' },
-            }),
-        });
+        const requestBody = {
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.6,
+            response_format: { type: 'json_object' },
+        };
+
+        let resp;
+        if (userApiKey) {
+            // User has their own key — go directly to OpenAI
+            resp = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + userApiKey,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
+            });
+        } else if (WORKER_URL) {
+            // Use the shared Worker proxy
+            resp = await fetch(WORKER_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody),
+            });
+        } else {
+            throw new Error('No OpenAI key configured. Click ⚙ API key (top right) to set one.');
+        }
+
         if (!resp.ok) {
             const errText = await resp.text();
             throw new Error(`OpenAI API error (${resp.status}): ${errText.slice(0, 200)}`);
@@ -863,7 +887,7 @@ OTHER RULES:
         if (!name) return;
 
         const apiKey = getApiKey();
-        if (!apiKey) {
+        if (!apiKey && !WORKER_URL) {
             authorError.textContent = 'Please set your OpenAI API key first (top right).';
             authorError.style.display = 'block';
             openSettings();

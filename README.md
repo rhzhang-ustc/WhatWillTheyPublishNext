@@ -11,29 +11,36 @@ Inspired by Kris Hauser's
 
 ## How it runs
 
-Everything is browser-side — no backend. The page calls:
+The page calls:
 
-- **OpenAlex** directly (CORS-enabled, free, no key needed)
-- **OpenAI** directly with **your** key (stored only in your browser's
-  `localStorage`, never sent anywhere except OpenAI itself)
+- **OpenAlex** directly from the browser (CORS-enabled, free, no key)
+- **OpenAI** for word-bank extraction. Either:
+  1. **Shared backend** — a tiny Cloudflare Worker (`worker/`) holds
+     your key as a secret, so visitors don't need their own. *(default)*
+  2. **User-provided key** — power users paste their own OpenAI key via
+     the ⚙ button; the page then calls OpenAI directly, bypassing your
+     Worker.
 
-You'll need an OpenAI key — get one at
-[platform.openai.com/api-keys](https://platform.openai.com/api-keys).
-Set a small monthly cap there if you're worried about cost.
+## Deployment
+
+1. **Frontend (GitHub Pages):**
+   - Push this repo to GitHub
+   - Repo → **Settings** → **Pages** → Source = `main` / root
+   - Live at `https://<your-handle>.github.io/<repo-name>/` in ~1 min
+
+2. **Shared backend (Cloudflare Worker):**
+   - See `worker/README.md` for full steps
+   - tl;dr: `wrangler login`, `wrangler secret put OPENAI_API_KEY`,
+     `wrangler deploy`
+   - Copy the Worker URL into `index.html` (the `WORKER_URL` constant
+     near the top of the script tag), commit, push.
+   - If you skip this, the page still works but visitors will need to
+     supply their own OpenAI key.
 
 ## Local use
 
-Just open `index.html` in any browser. Click the **⚙ API key** button in
-the top-right, paste your key, and start generating.
-
-## Deploying to GitHub Pages
-
-1. Push this repo to GitHub
-2. Repo → **Settings** → **Pages** → Source = `main` branch / root
-3. After ~1 minute, the page is live at
-   `https://<your-handle>.github.io/<repo-name>/`
-
-That's it. No build step, no secrets, no server.
+Open `index.html` directly. If `config.local.js` is present, your key
+is auto-loaded. Otherwise click ⚙ API key, paste your key, save.
 
 ## Files
 
