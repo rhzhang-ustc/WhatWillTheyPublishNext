@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Would [Your Hero] Publish Next?</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            text-align: center;
+            padding: 3rem 1rem 1.5rem;
+        }
+        header h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        header h1 .hero-slot {
+            font-style: italic;
+            opacity: 0.75;
+        }
+        header p {
+            color: #94a3b8;
+            margin-top: 0.4rem;
+            font-size: 0.95rem;
+        }
+
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            width: min(700px, 92vw);
+            padding: 2.5rem 2rem;
+            margin-top: 1rem;
+            text-align: center;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+        }
+
+        #title-display {
+            font-size: 1.55rem;
+            font-weight: 600;
+            line-height: 1.45;
+            color: #f1f5f9;
+            min-height: 4.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 0;
+        }
+        #title-display .acronym {
+            color: #38bdf8;
+        }
+
+        .subtitle {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 0.8rem;
+        }
+
+        .buttons {
+            margin-top: 1.8rem;
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 0.7rem 1.6rem;
+            border-radius: 10px;
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #6366f1);
+            color: #fff;
+        }
+        .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); }
+        .btn-primary:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: none;
+            filter: none;
+        }
+        .author-section {
+            width: min(700px, 92vw);
+            margin-top: 1.5rem;
+            display: grid;
+            grid-template-columns: 1.4fr 1fr auto;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        @media (max-width: 500px) {
+            .author-section { grid-template-columns: 1fr; }
+        }
+        .author-section input {
+            padding: 0.6rem 0.8rem;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #e2e8f0;
+            font-size: 0.95rem;
+            min-width: 0;
+        }
+        .author-section input:focus { outline: 1px solid #6366f1; border-color: #6366f1; }
+        .author-section input::placeholder { color: #64748b; }
+        .btn-fetch {
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            border: none;
+            background: #334155;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .btn-fetch:hover { background: #475569; }
+        .btn-fetch:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .author-badge {
+            width: min(700px, 92vw);
+            margin-top: 0.6rem;
+            display: none !important;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.8rem;
+            background: #1e293b;
+            border: 1px solid #6366f1;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            color: #a5b4fc;
+        }
+        .author-badge .author-name { font-weight: 600; }
+        .author-badge .author-clear {
+            margin-left: auto;
+            cursor: pointer;
+            color: #94a3b8;
+            font-size: 1.1rem;
+            line-height: 1;
+        }
+        .author-badge .author-clear:hover { color: #f1f5f9; }
+
+        .author-error {
+            width: min(700px, 92vw);
+            margin-top: 0.4rem;
+            font-size: 0.8rem;
+            color: #f87171;
+            display: none;
+        }
+
+        .debug-panel {
+            width: min(700px, 92vw);
+            margin-top: 1rem;
+            display: none !important;
+        }
+        .debug-panel summary {
+            cursor: pointer;
+            color: #94a3b8;
+            font-size: 0.9rem;
+            padding: 0.5rem 0;
+            user-select: none;
+        }
+        .debug-panel summary:hover { color: #cbd5e1; }
+        .debug-content {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 1rem 1.2rem;
+            margin-top: 0.5rem;
+            font-size: 0.82rem;
+        }
+        .debug-section { margin-bottom: 1rem; }
+        .debug-section:last-child { margin-bottom: 0; }
+        .debug-section h4 {
+            color: #f59e0b;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.4rem;
+            font-weight: 600;
+        }
+        .debug-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+        }
+        .debug-tag {
+            background: #334155;
+            color: #cbd5e1;
+            padding: 0.2rem 0.55rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+        }
+        .debug-tag.method { background: #1e3a8a; color: #bfdbfe; }
+        .debug-tag.task { background: #14532d; color: #bbf7d0; }
+        .debug-tag.app { background: #581c87; color: #e9d5ff; }
+        .debug-tag.variant { background: #7c2d12; color: #fed7aa; }
+        .debug-variant-map { font-size: 0.78rem; }
+        .debug-variant-map .vkey { color: #fbbf24; font-weight: 600; }
+        .debug-variant-map .vlist { color: #cbd5e1; margin-left: 0.5rem; }
+        .debug-titles {
+            max-height: 280px;
+            overflow-y: auto;
+            font-size: 0.78rem;
+            line-height: 1.5;
+        }
+        .debug-titles ol {
+            padding-left: 1.5rem;
+            color: #94a3b8;
+        }
+        .debug-titles li { margin-bottom: 0.15rem; }
+
+        .filters {
+            width: min(700px, 92vw);
+            margin-top: 1.5rem;
+        }
+        .filters summary {
+            cursor: pointer;
+            color: #94a3b8;
+            font-size: 0.9rem;
+            padding: 0.5rem 0;
+            user-select: none;
+        }
+        .filters summary:hover { color: #cbd5e1; }
+        .filter-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+        @media (max-width: 500px) {
+            .filter-grid { grid-template-columns: 1fr; }
+        }
+        .filter-group label {
+            display: block;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-bottom: 0.3rem;
+            font-weight: 500;
+        }
+        .filter-group select {
+            width: 100%;
+            padding: 0.5rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .filter-group select:focus { outline: 1px solid #6366f1; border-color: #6366f1; }
+
+        .settings-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            border-radius: 8px;
+            padding: 0.45rem 0.7rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        .settings-toggle:hover { color: #e2e8f0; border-color: #6366f1; }
+        .settings-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .settings-modal.open { display: flex; }
+        .settings-modal-content {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 1.5rem 1.6rem;
+            width: min(440px, 100%);
+        }
+        .settings-modal-content h3 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: #f1f5f9;
+        }
+        .settings-modal-content p {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-bottom: 0.9rem;
+            line-height: 1.5;
+        }
+        .settings-modal-content p a { color: #818cf8; }
+        .settings-modal-content input {
+            width: 100%;
+            padding: 0.55rem 0.7rem;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .settings-modal-content input:focus { outline: 1px solid #6366f1; border-color: #6366f1; }
+        .settings-modal-buttons {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+            margin-top: 1rem;
+        }
+        .settings-modal-buttons button {
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .settings-modal-buttons .btn-save {
+            background: linear-gradient(135deg, #3b82f6, #6366f1);
+            color: #fff;
+        }
+        .settings-modal-buttons .btn-cancel {
+            background: #334155;
+            color: #cbd5e1;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #475569;
+            font-size: 0.8rem;
+        }
+        footer a { color: #64748b; text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<button class="settings-toggle" id="settings-toggle" title="Set OpenAI API key">⚙ API key</button>
+
+<div class="settings-modal" id="settings-modal">
+    <div class="settings-modal-content">
+        <h3>OpenAI API key</h3>
+        <p>This app calls the OpenAI API directly from your browser.
+        Your key is stored only in this browser's <code>localStorage</code> and
+        is never sent anywhere except to OpenAI itself.
+        <br><br>Get a key from
+        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>.</p>
+        <input type="password" id="settings-key" placeholder="sk-..." autocomplete="off">
+        <div class="settings-modal-buttons">
+            <button class="btn-cancel" id="settings-cancel">Cancel</button>
+            <button class="btn-save" id="settings-save">Save</button>
+        </div>
+    </div>
+</div>
+
+<header>
+    <h1>What Would <span class="hero-slot" id="hero-slot">[Your Hero]</span> Publish Next?</h1>
+    <p>We can't promise no GPTs were harmed in the making of these titles.</p>
+</header>
+
+<div class="author-section">
+    <input type="text" id="author-input" placeholder="Pieter Abbeel">
+    <input type="text" id="affiliation-input" placeholder="Affiliation (optional, e.g., Berkeley)">
+    <button class="btn-fetch" id="btn-fetch">Fetch Author</button>
+</div>
+<div class="author-badge" id="author-badge">
+    Generating as: <span class="author-name" id="author-name-label"></span>
+    <span class="author-clear" id="author-clear" title="Clear author">&times;</span>
+</div>
+<div class="author-error" id="author-error"></div>
+
+<div class="card">
+    <div id="title-display"></div>
+    <div class="subtitle">(randomly generated &mdash; any resemblance to real papers is purely coincidental)</div>
+    <div class="buttons">
+        <button class="btn btn-primary" id="btn-generate">Generate Another</button>
+    </div>
+</div>
+
+<details class="debug-panel" id="debug-panel">
+    <summary>Debug: extracted parameters &amp; fetched papers</summary>
+    <div class="debug-content">
+        <div class="debug-section">
+            <h4>Learning Methods</h4>
+            <div class="debug-tags" id="debug-methods"></div>
+        </div>
+        <div class="debug-section">
+            <h4>Tasks</h4>
+            <div class="debug-tags" id="debug-tasks"></div>
+        </div>
+        <div class="debug-section">
+            <h4>Applications</h4>
+            <div class="debug-tags" id="debug-apps"></div>
+        </div>
+        <div class="debug-section">
+            <h4>Variants</h4>
+            <div class="debug-tags" id="debug-variants"></div>
+        </div>
+        <div class="debug-section">
+            <h4>Task Pre-Variants</h4>
+            <div class="debug-variant-map" id="debug-prevariants"></div>
+        </div>
+        <div class="debug-section">
+            <h4>Task Post-Variants</h4>
+            <div class="debug-variant-map" id="debug-postvariants"></div>
+        </div>
+        <div class="debug-section">
+            <h4>Fetched Papers (<span id="debug-titles-count">0</span>)</h4>
+            <div class="debug-titles">
+                <ol id="debug-titles-list"></ol>
+            </div>
+        </div>
+    </div>
+</details>
+
+<footer>
+    Inspired by <a href="https://kkhauser.web.illinois.edu">Kris Hauser</a>'s original ICRA Paper Title Generator.
+</footer>
+
+<script>
+(function () {
+    // Title patterns (kept locally — these are structure, not data)
+    const patterns = [
+        'LEARNINGVARIANT LEARNINGMETHODS for TASKPREVARIANT TASK in APPLICATION TASKPOSTVARIANT',
+        'a novel LEARNINGMETHOD_NOUN for TASKPREVARIANT TASK in APPLICATION TASKPOSTVARIANT',
+        'towards a LEARNINGVARIANT LEARNINGMETHOD_NOUN for TASKPREVARIANT TASK in APPLICATION TASKPOSTVARIANT',
+        'LEARNINGMETHOD_IS all you need: LEARNINGVARIANT TASKPREVARIANT TASK for APPLICATION TASKPOSTVARIANT',
+        'TASKPREVARIANT TASK in APPLICATION TASKPOSTVARIANT with LEARNINGVARIANT LEARNINGMETHODS',
+        'the unreasonable effectiveness of LEARNINGMETHODS for TASKPREVARIANT TASK in APPLICATION TASKPOSTVARIANT'
+    ];
+
+    // ===== HELPERS =====
+
+    function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+    function titleCase(str) {
+        return str.split(' ').map((word, i) =>
+            (word.length > 3 || i === 0) ? word.charAt(0).toUpperCase() + word.slice(1) : word
+        ).join(' ');
+    }
+
+    function bigWords(str) {
+        const exclude = ['unreasonable','effectiveness','novel','with','over','using','need','approach','towards'];
+        return str.split(' ').filter(w => w.length > 3 && !exclude.includes(w));
+    }
+
+    function acronym(str, min = 3, max = 6) {
+        const words = bigWords(str);
+        if (words.length < min) return '';
+        max = Math.min(max, words.length);
+        const num = min + Math.floor(Math.random() * (max - min + 1));
+        const start = Math.floor(Math.random() * (words.length - num));
+        return words.slice(start, start + num).map(w => w.charAt(0)).join('').toUpperCase();
+    }
+
+    // ===== AUTHOR STATE =====
+
+    let authorWordBanks = null; // null = no author loaded yet; cannot generate
+
+    // ===== GENERATOR =====
+
+    function generate() {
+        if (!authorWordBanks) return null;
+
+        const curMethods = authorWordBanks.learningmethod || [];
+        const curMethodsPlural = authorWordBanks.learningmethods || [];
+        const curMethodsCat = authorWordBanks.learningmethod_category || [];
+        const curVariants = authorWordBanks.learningvariant || [];
+        const curTasks = authorWordBanks.task || [];
+        const curApps = authorWordBanks.application || [];
+        const curPreVariant = authorWordBanks.taskprevariant || {};
+        const curPostVariant = authorWordBanks.taskpostvariant || {};
+
+        if (curMethods.length === 0 || curTasks.length === 0 || curApps.length === 0) return null;
+
+        // Pick pattern
+        const chosenPattern = Math.floor(Math.random() * patterns.length);
+        let pattern = patterns[chosenPattern];
+
+        // Pick learning method
+        const mi = Math.floor(Math.random() * curMethods.length);
+        const method = curMethods[mi];
+        const methods = mi < curMethodsPlural.length ? curMethodsPlural[mi] : method + 's';
+        const isCat = mi < curMethodsCat.length ? curMethodsCat[mi] : false;
+        const methodIs = isCat ? method + ' is' : methods + ' are';
+        const methodNoun = isCat ? method + ' approach' : method;
+
+        // Pick task / variant / application
+        const task = pick(curTasks);
+        const variant = curVariants.length ? pick(curVariants) : '';
+        const app = pick(curApps);
+
+        // Pre/post variant
+        const usePre = (Math.random() < 0.3) && task in curPreVariant;
+        const usePost = (Math.random() < 0.3) && task in curPostVariant && !usePre;
+        const pre = usePre ? pick(curPreVariant[task]) : '';
+        const post = usePost ? pick(curPostVariant[task]) : '';
+
+        // Fill template
+        let title = pattern
+            .replace('LEARNINGMETHOD_NOUN', methodNoun)
+            .replace('LEARNINGMETHOD_IS', methodIs)
+            .replace('LEARNINGVARIANT', variant)
+            .replace('LEARNINGMETHODS', methods)
+            .replace('LEARNINGMETHOD', method)
+            .replace('TASKPREVARIANT', pre)
+            .replace('TASKPOSTVARIANT', post)
+            .replace('APPLICATION', app)
+            .replace('TASK', task)
+            .replace(/  +/g, ' ');
+
+        const useAcronym = Math.random() < 0.6;
+        const acr = useAcronym ? acronym(title) : '';
+
+        title = titleCase(title);
+        return { title, acronym: acr };
+    }
+
+    // ===== UI =====
+
+    const display = document.getElementById('title-display');
+    const btnGenerate = document.getElementById('btn-generate');
+
+    function render(result) {
+        const { title, acronym: acr } = result;
+        const full = acr ? acr + ': ' + title : title;
+        if (acr) {
+            display.innerHTML = '<span class="acronym">' + acr + ':</span>&nbsp;' + title;
+        } else {
+            display.textContent = title;
+        }
+        return full;
+    }
+
+    function showPlaceholder() {
+        display.innerHTML = '<span style="color:#64748b;font-size:1rem;font-weight:400">' +
+            'Fetch an author above to start generating titles.</span>';
+    }
+
+    function doGenerate() {
+        const result = generate();
+        if (!result) {
+            showPlaceholder();
+            return;
+        }
+        render(result);
+    }
+
+    btnGenerate.addEventListener('click', doGenerate);
+
+    // Keyboard shortcut
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); doGenerate(); }
+    });
+
+    // ===== AUTHOR FETCH =====
+
+    const authorInput = document.getElementById('author-input');
+    const affiliationInput = document.getElementById('affiliation-input');
+    const btnFetch = document.getElementById('btn-fetch');
+    const authorBadge = document.getElementById('author-badge');
+    const authorNameLabel = document.getElementById('author-name-label');
+    const authorClear = document.getElementById('author-clear');
+    const authorError = document.getElementById('author-error');
+
+    btnFetch.addEventListener('click', fetchAuthor);
+    [authorInput, affiliationInput].forEach(el =>
+        el.addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchAuthor(); })
+    );
+
+    const debugPanel = document.getElementById('debug-panel');
+
+    function renderTags(elId, items, cls) {
+        const el = document.getElementById(elId);
+        el.innerHTML = '';
+        if (!items || items.length === 0) {
+            el.innerHTML = '<span style="color:#64748b;font-size:0.78rem">(none)</span>';
+            return;
+        }
+        items.forEach(item => {
+            const tag = document.createElement('span');
+            tag.className = 'debug-tag ' + cls;
+            tag.textContent = item;
+            el.appendChild(tag);
+        });
+    }
+
+    function renderVariantMap(elId, map) {
+        const el = document.getElementById(elId);
+        el.innerHTML = '';
+        const keys = Object.keys(map || {});
+        if (keys.length === 0) {
+            el.innerHTML = '<span style="color:#64748b;font-size:0.78rem">(none)</span>';
+            return;
+        }
+        keys.forEach(k => {
+            const row = document.createElement('div');
+            row.innerHTML = '<span class="vkey">' + k + ':</span><span class="vlist">' +
+                (map[k] || []).join(', ') + '</span>';
+            el.appendChild(row);
+        });
+    }
+
+    function populateDebug(data) {
+        const wb = data.wordBanks;
+        renderTags('debug-methods', wb.learningmethod, 'method');
+        renderTags('debug-tasks', wb.task, 'task');
+        renderTags('debug-apps', wb.application, 'app');
+        renderTags('debug-variants', wb.learningvariant, 'variant');
+        renderVariantMap('debug-prevariants', wb.taskprevariant);
+        renderVariantMap('debug-postvariants', wb.taskpostvariant);
+
+        const titlesList = document.getElementById('debug-titles-list');
+        const titlesCount = document.getElementById('debug-titles-count');
+        titlesCount.textContent = data.titles.length;
+        titlesList.innerHTML = data.titles.map(t => '<li>' + escapeHtml(t) + '</li>').join('');
+
+        debugPanel.style.display = 'block';
+        debugPanel.open = true;
+    }
+
+    function escapeHtml(s) {
+        return s.replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]));
+    }
+
+    // ===== OPENALEX (browser-side) =====
+
+    const OPENALEX_BASE = 'https://api.openalex.org';
+
+    async function resolveInstitution(affiliation) {
+        if (!affiliation) return { id: null, name: null };
+        const url = `${OPENALEX_BASE}/institutions?search=${encodeURIComponent(affiliation)}&per-page=1`;
+        const resp = await fetch(url);
+        if (!resp.ok) return { id: null, name: null };
+        const j = await resp.json();
+        const top = (j.results || [])[0];
+        if (!top) return { id: null, name: null };
+        return { id: (top.id || '').split('/').pop() || null, name: top.display_name || null };
+    }
+
+    async function fetchAuthorTitles(name, affiliation) {
+        const { id: instId, name: instName } = await resolveInstitution(affiliation);
+        const affLower = (affiliation || '').toLowerCase();
+
+        // Search authors
+        const aurl = `${OPENALEX_BASE}/authors?search=${encodeURIComponent(name)}&per-page=10`;
+        const aresp = await fetch(aurl);
+        if (!aresp.ok) throw new Error(`OpenAlex author search failed: ${aresp.status}`);
+        const adata = await aresp.json();
+        const candidates = adata.results || [];
+        if (candidates.length === 0) return null;
+
+        // Pick best author candidate
+        let author;
+        if (affiliation) {
+            const matches = candidates.filter(c => {
+                const insts = c.last_known_institutions || [];
+                if (instId && insts.some(i => (i.id || '').split('/').pop() === instId)) return true;
+                if (affLower && insts.some(i => (i.display_name || '').toLowerCase().includes(affLower))) return true;
+                return false;
+            });
+            author = matches.length
+                ? matches.reduce((a, b) => (b.works_count || 0) > (a.works_count || 0) ? b : a)
+                : candidates.reduce((a, b) => (b.cited_by_count || 0) > (a.cited_by_count || 0) ? b : a);
+        } else {
+            author = candidates.reduce((a, b) => (b.cited_by_count || 0) > (a.cited_by_count || 0) ? b : a);
+        }
+
+        const authorId = (author.id || '').split('/').pop();
+        const authorName = author.display_name || name;
+        const insts = author.last_known_institutions || [];
+        const authorAff = insts.map(i => i.display_name).filter(Boolean).join(', ') || null;
+
+        // Fetch top works
+        const wurl = `${OPENALEX_BASE}/works?filter=author.id:${authorId}` +
+            `&per-page=200&select=title,type,authorships,cited_by_count&sort=cited_by_count:desc`;
+        const wresp = await fetch(wurl);
+        if (!wresp.ok) throw new Error(`OpenAlex works fetch failed: ${wresp.status}`);
+        const wdata = await wresp.json();
+        const works = wdata.results || [];
+
+        // Filter
+        const seen = new Set();
+        const titles = [];
+        for (const w of works) {
+            const t = w.title;
+            if (!t) continue;
+            if (w.type && !['article', 'book-chapter', 'preprint'].includes(w.type)) continue;
+
+            let matchedAuthorship = null;
+            for (const a of (w.authorships || [])) {
+                if ((a.author?.id || '').split('/').pop() === authorId) {
+                    matchedAuthorship = a;
+                    break;
+                }
+            }
+            if (affiliation && matchedAuthorship) {
+                const wsInsts = matchedAuthorship.institutions || [];
+                const rawStrs = matchedAuthorship.raw_affiliation_strings || [];
+                const idMatch = instId && wsInsts.some(i => (i.id || '').split('/').pop() === instId);
+                const instMatch = affLower && wsInsts.some(i => (i.display_name || '').toLowerCase().includes(affLower));
+                const rawMatch = affLower && rawStrs.some(s => (s || '').toLowerCase().includes(affLower));
+                const canonicalMatch = instName && rawStrs.some(s => (s || '').toLowerCase().includes(instName.toLowerCase()));
+                if (!(idMatch || instMatch || rawMatch || canonicalMatch)) continue;
+            }
+
+            const key = t.trim().toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            titles.push(t);
+            if (titles.length >= 100) break;
+        }
+
+        return { name: authorName, affiliation: authorAff, titles };
+    }
+
+    // ===== OPENAI (browser-side) =====
+
+    function getApiKey() {
+        return localStorage.getItem('openai_api_key') || '';
+    }
+
+    async function gptExtract(titles, apiKey) {
+        const titlesText = titles.slice(0, 100).map(t => '- ' + t).join('\n');
+        const prompt = `You are analyzing paper titles from a researcher. Extract research terms structured for use as building blocks in a paper-title generator.
+
+Paper titles:
+${titlesText}
+
+The terms will be substituted into title patterns like:
+  "{learningvariant} {learningmethods} for {taskprevariant} {task} in {application} {taskpostvariant}"
+
+Return a JSON object with this exact schema. ALL fields are required and must be substantively populated:
+{
+  "learningmethod": [...],
+  "learningmethods": [...],
+  "learningmethod_category": [...],
+  "learningvariant": [...],
+  "task": [...],
+  "taskprevariant": {"task_name": [...]},
+  "taskpostvariant": {"task_name": [...]},
+  "application": [...]
+}
+
+REQUIRED COUNTS:
+- learningmethod: 8-15 entries (singular ML/AI methods)
+- learningmethods: SAME length as learningmethod (plurals; for uncountable like "reinforcement learning", repeat the singular)
+- learningmethod_category: SAME length as learningmethod (true=uncountable, false=countable)
+- learningvariant: 8-15 short adjective modifiers (e.g., "robust", "zero-shot", "vision-guided")
+- task: 10-20 research tasks
+- application: 8-15 robot platforms / domains
+- taskprevariant: REQUIRED — populate entries for AT LEAST 8 tasks, 3-6 entries each
+- taskpostvariant: REQUIRED — populate entries for AT LEAST 8 tasks, 3-6 entries each
+
+PRE-VARIANT FORMAT — single ADJECTIVE phrase (no preposition), reads as "{prevariant} {task}":
+  "manipulation": ["dexterous", "bimanual", "in-hand", "contact-rich"]
+
+POST-VARIANT FORMAT — must START with a preposition (of, with, in, for, under, using, via, over, from, during, across, without, and, through, by) so "{task} {postvariant}" reads fluently:
+  "manipulation": ["of deformable objects", "in clutter", "with tactile feedback", "under occlusion"]
+
+OTHER RULES:
+- 1-5 words per entry. Lowercase except proper nouns/acronyms. Avoid near-duplicates.
+- Anchor terms in this author's work (synonyms welcome).
+- Keys in taskprevariant/taskpostvariant must EXACTLY match entries in "task".
+- Return valid JSON only, no markdown fences.`;
+
+        const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + apiKey,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.6,
+                response_format: { type: 'json_object' },
+            }),
+        });
+        if (!resp.ok) {
+            const errText = await resp.text();
+            throw new Error(`OpenAI API error (${resp.status}): ${errText.slice(0, 200)}`);
+        }
+        const j = await resp.json();
+        const content = j.choices?.[0]?.message?.content || '{}';
+        const result = JSON.parse(content);
+
+        // Post-process: align method/plural/category lengths
+        const methods = result.learningmethod || [];
+        let plurals = result.learningmethods || [];
+        let cats = result.learningmethod_category || [];
+        while (plurals.length < methods.length) plurals.push(methods[plurals.length] + 's');
+        while (cats.length < methods.length) cats.push(false);
+        plurals = plurals.slice(0, methods.length);
+        cats = cats.slice(0, methods.length);
+        plurals = methods.map((m, i) => cats[i] ? m : plurals[i]);
+        result.learningmethods = plurals;
+        result.learningmethod_category = cats;
+
+        for (const k of ['learningmethod', 'learningmethods', 'learningmethod_category', 'learningvariant', 'task', 'application']) {
+            if (!result[k]) result[k] = [];
+        }
+        for (const k of ['taskprevariant', 'taskpostvariant']) {
+            if (!result[k]) result[k] = {};
+        }
+
+        // Drop postvariant entries without leading preposition
+        const validStarts = ['of ', 'with ', 'in ', 'for ', 'under ', 'using ', 'via ', 'over ',
+            'from ', 'during ', 'across ', 'without ', 'and ', 'through ', 'near ', 'between ', 'by '];
+        const cleanedPost = {};
+        for (const [task, phrases] of Object.entries(result.taskpostvariant)) {
+            const kept = (phrases || []).filter(p =>
+                typeof p === 'string' && validStarts.some(s => p.trim().toLowerCase().startsWith(s))
+            );
+            if (kept.length) cleanedPost[task] = kept;
+        }
+        result.taskpostvariant = cleanedPost;
+
+        // Drop pre/post variants whose task isn't in the task list
+        const taskSet = new Set(result.task.map(t => t.toLowerCase()));
+        for (const k of ['taskprevariant', 'taskpostvariant']) {
+            const filtered = {};
+            for (const [task, val] of Object.entries(result[k])) {
+                if (taskSet.has(task.toLowerCase())) filtered[task] = val;
+            }
+            result[k] = filtered;
+        }
+
+        return result;
+    }
+
+    async function fetchAuthor() {
+        const name = authorInput.value.trim();
+        const affiliation = affiliationInput.value.trim();
+        if (!name) return;
+
+        const apiKey = getApiKey();
+        if (!apiKey) {
+            authorError.textContent = 'Please set your OpenAI API key first (top right).';
+            authorError.style.display = 'block';
+            openSettings();
+            return;
+        }
+
+        btnFetch.disabled = true;
+        btnFetch.textContent = 'Fetching papers...';
+        authorError.style.display = 'none';
+
+        try {
+            const result = await fetchAuthorTitles(name, affiliation);
+            if (!result) throw new Error(`Author "${name}" not found on OpenAlex`);
+            if (!result.titles.length) throw new Error(`No papers found for "${result.name}"`);
+
+            btnFetch.textContent = 'Asking GPT...';
+            const wordBanks = await gptExtract(result.titles, apiKey);
+            if (!wordBanks || (wordBanks.task || []).length === 0) {
+                throw new Error('GPT returned empty word banks');
+            }
+
+            const data = {
+                name: result.name,
+                affiliation: result.affiliation,
+                titles: result.titles,
+                wordBanks,
+            };
+
+            authorWordBanks = data.wordBanks;
+
+            // Swap "[Your Hero]" → actual author name in headline + page title
+            const heroSlot = document.getElementById('hero-slot');
+            heroSlot.textContent = data.name;
+            heroSlot.style.fontStyle = 'normal';
+            heroSlot.style.opacity = '1';
+            document.title = 'What Would ' + data.name + ' Publish Next?';
+
+            // Dedupe titles for display
+            const seen = new Set();
+            const dedupedTitles = data.titles.filter(t => {
+                const key = (t || '').trim().toLowerCase();
+                if (!key || seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            data.titles = dedupedTitles;
+
+            const affLabel = data.affiliation ? ' — ' + data.affiliation : '';
+            const srcLabel = data.source ? ' [' + data.source + ']' : '';
+            authorNameLabel.textContent = data.name + affLabel +
+                ' (' + dedupedTitles.length + ' papers)' + srcLabel;
+            authorBadge.style.display = 'flex';
+            btnGenerate.disabled = false;
+
+            populateDebug(data);
+            doGenerate();
+        } catch (err) {
+            authorError.textContent = err.message;
+            authorError.style.display = 'block';
+        } finally {
+            btnFetch.disabled = false;
+            btnFetch.textContent = 'Fetch Author';
+        }
+    }
+
+    authorClear.addEventListener('click', () => {
+        authorWordBanks = null;
+        authorBadge.style.display = 'none';
+        authorInput.value = '';
+        affiliationInput.value = '';
+        debugPanel.style.display = 'none';
+        btnGenerate.disabled = true;
+
+        // Restore "[Your Hero]" placeholder in headline + page title
+        const heroSlot = document.getElementById('hero-slot');
+        heroSlot.textContent = '[Your Hero]';
+        heroSlot.style.fontStyle = 'italic';
+        heroSlot.style.opacity = '0.75';
+        document.title = 'What Would [Your Hero] Publish Next?';
+
+        showPlaceholder();
+    });
+
+    // ===== SETTINGS MODAL (OpenAI API key) =====
+
+    const settingsToggle = document.getElementById('settings-toggle');
+    const settingsModal = document.getElementById('settings-modal');
+    const settingsKeyInput = document.getElementById('settings-key');
+    const settingsSave = document.getElementById('settings-save');
+    const settingsCancel = document.getElementById('settings-cancel');
+
+    function openSettings() {
+        settingsKeyInput.value = getApiKey();
+        settingsModal.classList.add('open');
+        setTimeout(() => settingsKeyInput.focus(), 50);
+    }
+    function closeSettings() { settingsModal.classList.remove('open'); }
+
+    settingsToggle.addEventListener('click', openSettings);
+    settingsCancel.addEventListener('click', closeSettings);
+    settingsSave.addEventListener('click', () => {
+        const v = settingsKeyInput.value.trim();
+        if (v) localStorage.setItem('openai_api_key', v);
+        else localStorage.removeItem('openai_api_key');
+        closeSettings();
+    });
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) closeSettings();
+    });
+    settingsKeyInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') settingsSave.click();
+    });
+
+    // Show ✓ on the toggle button when a key is set
+    function updateSettingsToggleLabel() {
+        settingsToggle.textContent = getApiKey() ? '⚙ API key ✓' : '⚙ API key';
+    }
+    updateSettingsToggleLabel();
+    settingsSave.addEventListener('click', updateSettingsToggleLabel);
+
+    // Initial state: no author loaded
+    btnGenerate.disabled = true;
+    showPlaceholder();
+})();
+</script>
+</body>
+</html>
