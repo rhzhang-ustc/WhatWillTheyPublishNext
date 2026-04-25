@@ -560,34 +560,33 @@
         }[c]));
     }
 
-    // ===== OPENALEX (browser-side) =====
+    // ===== OPENAI (browser-side, used only when OPENAI_API_KEY is set
+    // via local config.local.js — bypasses the Worker for local dev) =====
 
     const OPENALEX_BASE = 'https://api.openalex.org';
 
+    function getApiKey() {
+        return (typeof window !== 'undefined' && window.OPENAI_API_KEY) || '';
+    }
+
     async function resolveInstitution(affiliation) {
         if (!affiliation) return { id: null, name: null };
-        const url = `${OPENALEX_BASE}/institutions?search=${encodeURIComponent(affiliation)}&per-page=1`;
-        const resp = await fetch(url);
-        if (!resp.ok) return { id: null, name: null };
-        const j = await resp.json();
+        const r = await fetch(`${OPENALEX_BASE}/institutions?search=${encodeURIComponent(affiliation)}&per-page=1`);
+        if (!r.ok) return { id: null, name: null };
+        const j = await r.json();
         const top = (j.results || [])[0];
         if (!top) return { id: null, name: null };
         return { id: (top.id || '').split('/').pop() || null, name: top.display_name || null };
     }
 
-    async function fetchAuthorTitles(name, affiliation) {
+    async function fetchAuthorTitlesDirect(name, affiliation) {
         const { id: instId, name: instName } = await resolveInstitution(affiliation);
         const affLower = (affiliation || '').toLowerCase();
-
-        // Search authors
-        const aurl = `${OPENALEX_BASE}/authors?search=${encodeURIComponent(name)}&per-page=10`;
-        const aresp = await fetch(aurl);
+        const aresp = await fetch(`${OPENALEX_BASE}/authors?search=${encodeURIComponent(name)}&per-page=10`);
         if (!aresp.ok) throw new Error(`OpenAlex author search failed: ${aresp.status}`);
-        const adata = await aresp.json();
-        const candidates = adata.results || [];
-        if (candidates.length === 0) return null;
+        const candidates = (await aresp.json()).results || [];
+        if (!candidates.length) return null;
 
-        // Pick best author candidate
         let author;
         if (affiliation) {
             const matches = candidates.filter(c => {
@@ -608,54 +607,37 @@
         const insts = author.last_known_institutions || [];
         const authorAff = insts.map(i => i.display_name).filter(Boolean).join(', ') || null;
 
-        // Fetch top works
-        const wurl = `${OPENALEX_BASE}/works?filter=author.id:${authorId}` +
-            `&per-page=200&select=title,type,authorships,cited_by_count&sort=cited_by_count:desc`;
-        const wresp = await fetch(wurl);
+        const wresp = await fetch(`${OPENALEX_BASE}/works?filter=author.id:${authorId}` +
+            `&per-page=200&select=title,type,authorships,cited_by_count&sort=cited_by_count:desc`);
         if (!wresp.ok) throw new Error(`OpenAlex works fetch failed: ${wresp.status}`);
-        const wdata = await wresp.json();
-        const works = wdata.results || [];
+        const works = (await wresp.json()).results || [];
 
-        // Filter
         const seen = new Set();
         const titles = [];
         for (const w of works) {
             const t = w.title;
             if (!t) continue;
             if (w.type && !['article', 'book-chapter', 'preprint'].includes(w.type)) continue;
-
-            let matchedAuthorship = null;
+            let matched = null;
             for (const a of (w.authorships || [])) {
-                if ((a.author?.id || '').split('/').pop() === authorId) {
-                    matchedAuthorship = a;
-                    break;
-                }
+                if ((a.author?.id || '').split('/').pop() === authorId) { matched = a; break; }
             }
-            if (affiliation && matchedAuthorship) {
-                const wsInsts = matchedAuthorship.institutions || [];
-                const rawStrs = matchedAuthorship.raw_affiliation_strings || [];
+            if (affiliation && matched) {
+                const wsInsts = matched.institutions || [];
+                const rawStrs = matched.raw_affiliation_strings || [];
                 const idMatch = instId && wsInsts.some(i => (i.id || '').split('/').pop() === instId);
                 const instMatch = affLower && wsInsts.some(i => (i.display_name || '').toLowerCase().includes(affLower));
                 const rawMatch = affLower && rawStrs.some(s => (s || '').toLowerCase().includes(affLower));
                 const canonicalMatch = instName && rawStrs.some(s => (s || '').toLowerCase().includes(instName.toLowerCase()));
                 if (!(idMatch || instMatch || rawMatch || canonicalMatch)) continue;
             }
-
             const key = t.trim().toLowerCase();
             if (seen.has(key)) continue;
             seen.add(key);
             titles.push(t);
             if (titles.length >= 100) break;
         }
-
         return { name: authorName, affiliation: authorAff, titles };
-    }
-
-    // ===== OPENAI (browser-side) =====
-
-    function getApiKey() {
-        // Local dev override via config.local.js (gitignored).
-        return (typeof window !== 'undefined' && window.OPENAI_API_KEY) || '';
     }
 
     async function gptExtract(titles, userApiKey) {
@@ -702,34 +684,19 @@ OTHER RULES:
 - Keys in taskprevariant/taskpostvariant must EXACTLY match entries in "task".
 - Return valid JSON only, no markdown fences.`;
 
-        const requestBody = {
-            model: 'gpt-4o-mini',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.6,
-            response_format: { type: 'json_object' },
-        };
-
-        let resp;
-        if (userApiKey) {
-            // User has their own key — go directly to OpenAI
-            resp = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': 'Bearer ' + userApiKey,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestBody),
-            });
-        } else if (WORKER_URL) {
-            // Use the shared Worker proxy
-            resp = await fetch(WORKER_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody),
-            });
-        } else {
-            throw new Error('No OpenAI key configured. Click ⚙ API key (top right) to set one.');
-        }
+        const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer ' + userApiKey,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.6,
+                response_format: { type: 'json_object' },
+            }),
+        });
 
         if (!resp.ok) {
             const errText = await resp.text();
@@ -796,26 +763,30 @@ OTHER RULES:
         }
 
         btnFetch.disabled = true;
-        btnFetch.textContent = 'Fetching papers...';
+        btnFetch.textContent = 'Fetching...';
         authorError.style.display = 'none';
 
         try {
-            const result = await fetchAuthorTitles(name, affiliation);
-            if (!result) throw new Error(`Author "${name}" not found on OpenAlex`);
-            if (!result.titles.length) throw new Error(`No papers found for "${result.name}"`);
-
-            btnFetch.textContent = 'Asking GPT...';
-            const wordBanks = await gptExtract(result.titles, apiKey);
-            if (!wordBanks || (wordBanks.task || []).length === 0) {
-                throw new Error('GPT returned empty word banks');
+            let data;
+            if (apiKey) {
+                // Local dev path: call OpenAlex + OpenAI directly
+                const r = await fetchAuthorTitlesDirect(name, affiliation);
+                if (!r) throw new Error(`Author "${name}" not found on OpenAlex`);
+                if (!r.titles.length) throw new Error(`No papers found for "${r.name}"`);
+                btnFetch.textContent = 'Asking GPT...';
+                const wordBanks = await gptExtract(r.titles, apiKey);
+                if (!wordBanks || (wordBanks.task || []).length === 0) {
+                    throw new Error('GPT returned empty word banks');
+                }
+                data = { name: r.name, affiliation: r.affiliation, titles: r.titles, wordBanks };
+            } else {
+                // Worker path: shared backend handles OpenAlex + OpenAI + caching
+                const url = `${WORKER_URL}/api/author?name=${encodeURIComponent(name)}` +
+                    (affiliation ? `&affiliation=${encodeURIComponent(affiliation)}` : '');
+                const resp = await fetch(url);
+                data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || `Worker error: ${resp.status}`);
             }
-
-            const data = {
-                name: result.name,
-                affiliation: result.affiliation,
-                titles: result.titles,
-                wordBanks,
-            };
 
             authorWordBanks = data.wordBanks;
 

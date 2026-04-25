@@ -3,9 +3,16 @@ main = "worker.js"
 compatibility_date = "2026-04-25"
 
 # Comma-separated list of origins allowed to hit the Worker.
-# Update after enabling GitHub Pages and your custom domain (if any).
 [vars]
 ALLOWED_ORIGINS = "https://rhzhang-ustc.github.io,http://localhost:5000,http://localhost:8000"
 
 # Set the OpenAI key as a secret (NOT committed):
 #   wrangler secret put OPENAI_API_KEY
+
+# KV namespace for caching author lookups (5-day TTL).
+# Create with:
+#   wrangler kv namespace create AUTHOR_CACHE
+# then paste the returned id here.
+[[kv_namespaces]]
+binding = "AUTHOR_CACHE"
+id = "PASTE_KV_NAMESPACE_ID_HERE"

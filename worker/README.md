@@ -1,41 +1,54 @@
-# Cloudflare Worker — OpenAI proxy
+# Cloudflare Worker — backend for the title generator
 
-A tiny proxy that holds your `OPENAI_API_KEY` as a secret and forwards
-chat-completion requests from the GitHub Pages frontend, so visitors
-don't need their own API key.
+Holds your `OPENAI_API_KEY` as a secret, fetches papers from OpenAlex,
+calls OpenAI to extract word banks, and caches results in Cloudflare KV
+for 5 days. The GitHub Pages frontend just calls
+`GET /api/author?name=...&affiliation=...`.
 
 ## Deployment
 
 1. **Create a Cloudflare account** at <https://cloudflare.com> (free).
 
-2. **Install wrangler** (Cloudflare's CLI):
+2. **Install wrangler:**
    ```sh
    npm install -g wrangler
    wrangler login
    ```
 
-3. **Set the OpenAI API key as a secret** (from this directory):
+3. **Set the OpenAI API key as a secret** (from `worker/`):
    ```sh
    cd worker
    wrangler secret put OPENAI_API_KEY
    # paste your sk-... key when prompted
    ```
 
-4. **Edit `wrangler.toml`** if needed:
-   - Update `ALLOWED_ORIGINS` to include your GitHub Pages URL
-     (e.g., `https://<your-handle>.github.io`)
+4. **Create the KV namespace for the cache:**
+   ```sh
+   wrangler kv namespace create AUTHOR_CACHE
+   # prints: id = "abc123def456..."
+   ```
+   Paste that id into `wrangler.toml` (replace `PASTE_KV_NAMESPACE_ID_HERE`).
 
-5. **Deploy:**
+5. **Edit `wrangler.toml`** if needed — `ALLOWED_ORIGINS` should include
+   your GitHub Pages URL.
+
+6. **Deploy:**
    ```sh
    wrangler deploy
    ```
 
    Wrangler prints a URL like
-   `https://what-will-they-publish-next.<your-handle>.workers.dev`
+   `https://what-will-they-publish-next.<your-handle>.workers.dev`.
 
-6. **Wire it into the frontend.** Open `../index.html` and update the
-   `WORKER_URL` constant near the top of the script tag to that URL.
-   Commit and push.
+7. **Wire it into the frontend.** Edit `../index.html`'s `WORKER_URL`
+   constant. Commit and push.
+
+## Caching
+
+Author lookups are cached in KV under the key `lower(name)|lower(affiliation)`
+with a 5-day TTL. Hits return instantly (no OpenAlex or OpenAI call).
+Misses populate the cache. Free KV tier: 100k reads/day, 1k writes/day,
+1 GB storage.
 
 ## Cost / abuse protection
 
