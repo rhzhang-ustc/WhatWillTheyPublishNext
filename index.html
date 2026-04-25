@@ -266,83 +266,6 @@
         }
         .filter-group select:focus { outline: 1px solid #6366f1; border-color: #6366f1; }
 
-        .settings-toggle {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            background: #1e293b;
-            border: 1px solid #334155;
-            color: #94a3b8;
-            border-radius: 8px;
-            padding: 0.45rem 0.7rem;
-            font-size: 0.8rem;
-            cursor: pointer;
-        }
-        .settings-toggle:hover { color: #e2e8f0; border-color: #6366f1; }
-        .settings-modal {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            z-index: 100;
-            align-items: center;
-            justify-content: center;
-            padding: 1rem;
-        }
-        .settings-modal.open { display: flex; }
-        .settings-modal-content {
-            background: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 1.5rem 1.6rem;
-            width: min(440px, 100%);
-        }
-        .settings-modal-content h3 {
-            font-size: 1rem;
-            margin-bottom: 0.5rem;
-            color: #f1f5f9;
-        }
-        .settings-modal-content p {
-            font-size: 0.85rem;
-            color: #94a3b8;
-            margin-bottom: 0.9rem;
-            line-height: 1.5;
-        }
-        .settings-modal-content p a { color: #818cf8; }
-        .settings-modal-content input {
-            width: 100%;
-            padding: 0.55rem 0.7rem;
-            border-radius: 8px;
-            border: 1px solid #334155;
-            background: #0f172a;
-            color: #e2e8f0;
-            font-family: monospace;
-            font-size: 0.85rem;
-        }
-        .settings-modal-content input:focus { outline: 1px solid #6366f1; border-color: #6366f1; }
-        .settings-modal-buttons {
-            display: flex;
-            gap: 0.5rem;
-            justify-content: flex-end;
-            margin-top: 1rem;
-        }
-        .settings-modal-buttons button {
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-        .settings-modal-buttons .btn-save {
-            background: linear-gradient(135deg, #3b82f6, #6366f1);
-            color: #fff;
-        }
-        .settings-modal-buttons .btn-cancel {
-            background: #334155;
-            color: #cbd5e1;
-        }
-
         footer {
             text-align: center;
             padding: 2rem 1rem;
@@ -353,25 +276,6 @@
     </style>
 </head>
 <body>
-
-<button class="settings-toggle" id="settings-toggle" title="Set OpenAI API key">⚙ API key</button>
-
-<div class="settings-modal" id="settings-modal">
-    <div class="settings-modal-content">
-        <h3>OpenAI API key (optional)</h3>
-        <p>By default this app uses a shared backend, so you don't need
-        a key. If you'd rather use <strong>your own</strong> key (no rate limits,
-        better privacy), paste it here. It's stored only in this browser's
-        <code>localStorage</code> and goes directly to OpenAI.
-        <br><br>Get a key from
-        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com/api-keys</a>.</p>
-        <input type="password" id="settings-key" placeholder="sk-..." autocomplete="off">
-        <div class="settings-modal-buttons">
-            <button class="btn-cancel" id="settings-cancel">Cancel</button>
-            <button class="btn-save" id="settings-save">Save</button>
-        </div>
-    </div>
-</div>
 
 <header>
     <h1>What Would <span class="hero-slot" id="hero-slot">[Your Hero]</span> Publish Next?</h1>
@@ -750,9 +654,8 @@
     // ===== OPENAI (browser-side) =====
 
     function getApiKey() {
-        // Priority: window-injected (local dev via config.local.js) → localStorage
-        return (typeof window !== 'undefined' && window.OPENAI_API_KEY) ||
-            localStorage.getItem('openai_api_key') || '';
+        // Local dev override via config.local.js (gitignored).
+        return (typeof window !== 'undefined' && window.OPENAI_API_KEY) || '';
     }
 
     async function gptExtract(titles, userApiKey) {
@@ -887,9 +790,8 @@ OTHER RULES:
 
         const apiKey = getApiKey();
         if (!apiKey && !WORKER_URL) {
-            authorError.textContent = 'Please set your OpenAI API key first (top right).';
+            authorError.textContent = 'No backend configured.';
             authorError.style.display = 'block';
-            openSettings();
             return;
         }
 
@@ -969,43 +871,6 @@ OTHER RULES:
 
         showPlaceholder();
     });
-
-    // ===== SETTINGS MODAL (OpenAI API key) =====
-
-    const settingsToggle = document.getElementById('settings-toggle');
-    const settingsModal = document.getElementById('settings-modal');
-    const settingsKeyInput = document.getElementById('settings-key');
-    const settingsSave = document.getElementById('settings-save');
-    const settingsCancel = document.getElementById('settings-cancel');
-
-    function openSettings() {
-        settingsKeyInput.value = getApiKey();
-        settingsModal.classList.add('open');
-        setTimeout(() => settingsKeyInput.focus(), 50);
-    }
-    function closeSettings() { settingsModal.classList.remove('open'); }
-
-    settingsToggle.addEventListener('click', openSettings);
-    settingsCancel.addEventListener('click', closeSettings);
-    settingsSave.addEventListener('click', () => {
-        const v = settingsKeyInput.value.trim();
-        if (v) localStorage.setItem('openai_api_key', v);
-        else localStorage.removeItem('openai_api_key');
-        closeSettings();
-    });
-    settingsModal.addEventListener('click', (e) => {
-        if (e.target === settingsModal) closeSettings();
-    });
-    settingsKeyInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') settingsSave.click();
-    });
-
-    // Show ✓ on the toggle button when a key is set
-    function updateSettingsToggleLabel() {
-        settingsToggle.textContent = getApiKey() ? '⚙ API key ✓' : '⚙ API key';
-    }
-    updateSettingsToggleLabel();
-    settingsSave.addEventListener('click', updateSettingsToggleLabel);
 
     // Initial state: no author loaded
     btnGenerate.disabled = true;
