@@ -436,6 +436,11 @@
     Inspired by <a href="https://kkhauser.web.illinois.edu">Kris Hauser</a>'s original ICRA Paper Title Generator.
 </footer>
 
+<!-- Optional: a local-only config file for development. Gitignored, so
+     it is never deployed. If present, sets window.OPENAI_API_KEY so you
+     don't need to paste it via the settings dialog. -->
+<script src="config.local.js" onerror="void 0"></script>
+
 <script>
 (function () {
     // Title patterns (kept locally — these are structure, not data)
@@ -738,7 +743,9 @@
     // ===== OPENAI (browser-side) =====
 
     function getApiKey() {
-        return localStorage.getItem('openai_api_key') || '';
+        // Priority: window-injected (local dev via config.local.js) → localStorage
+        return (typeof window !== 'undefined' && window.OPENAI_API_KEY) ||
+            localStorage.getItem('openai_api_key') || '';
     }
 
     async function gptExtract(titles, apiKey) {
