@@ -777,7 +777,19 @@ OTHER RULES:
         }
 
         btnFetch.disabled = true;
-        btnFetch.textContent = 'Fetching...';
+        const quips = [
+            'Stalking their citations…',
+            'Reading their h-index…',
+            'Stealing like a researcher…',
+            'Channeling them…',
+            'Pretending to be them…',
+            'Method acting…',
+            'Mind-melding with the LLM…',
+            'Plagiarizing tastefully…',
+            'Doing their next sabbatical…',
+            'Ghostwriting…',
+        ];
+        btnFetch.textContent = quips[Math.floor(Math.random() * quips.length)];
         authorError.style.display = 'none';
 
         try {
@@ -787,7 +799,6 @@ OTHER RULES:
                 const r = await fetchAuthorTitlesDirect(name, affiliation);
                 if (!r) throw new Error(`Author "${name}" not found on OpenAlex`);
                 if (!r.titles.length) throw new Error(`No papers found for "${r.name}"`);
-                btnFetch.textContent = 'Asking GPT...';
                 const wordBanks = await gptExtract(r.titles, apiKey);
                 if (!wordBanks || (wordBanks.task || []).length === 0) {
                     throw new Error('GPT returned empty word banks');
@@ -802,13 +813,11 @@ OTHER RULES:
                     data = await checkResp.json();
                 } else {
                     // 2) Cache miss — fetch OpenAlex from browser (avoids CF rate-limit)
-                    btnFetch.textContent = 'Searching OpenAlex...';
                     const r = await fetchAuthorTitlesDirect(name, affiliation);
                     if (!r) throw new Error(`Author "${name}" not found on OpenAlex`);
                     if (!r.titles.length) throw new Error(`No papers found for "${r.name}"`);
 
                     // 3) POST titles to Worker for GPT extraction + caching
-                    btnFetch.textContent = 'Asking GPT...';
                     const postResp = await fetch(`${WORKER_URL}/api/author`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
