@@ -603,8 +603,74 @@
         return qTokens.every(t => cTokens.has(t));
     }
 
+    // When an affiliation is provided, search WORKS by institution+name first.
+    // This is much more accurate for early-career researchers whose author
+    // profile on OpenAlex doesn't yet list the institution.
+    async function fetchAuthorTitlesByInstitution(name, instId, instName) {
+        const r = await fetch(openalexUrl('/works', {
+            filter: `raw_author_name.search:${name},authorships.institutions.id:${instId}`,
+            'per-page': 200,
+            select: 'title,type,authorships,cited_by_count',
+            sort: 'cited_by_count:desc',
+        }));
+        if (!r.ok) return null;
+        const works = (await r.json()).results || [];
+        if (!works.length) return null;
+
+        // Aggregate authors by ID — count works where author has this institution AND name matches.
+        const counts = new Map();
+        const names = new Map();
+        for (const w of works) {
+            for (const a of (w.authorships || [])) {
+                const au = a.author || {};
+                const aid = (au.id || '').split('/').pop();
+                if (!aid) continue;
+                const insts = a.institutions || [];
+                if (!insts.some(i => (i.id || '').split('/').pop() === instId)) continue;
+                const cName = au.display_name || '';
+                if (!nameMatches(name, cName)) continue;
+                counts.set(aid, (counts.get(aid) || 0) + 1);
+                names.set(aid, cName);
+            }
+        }
+        if (counts.size === 0) return null;
+        const topId = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        const authorName = names.get(topId) || name;
+
+        const seen = new Set();
+        const titles = [];
+        for (const w of works) {
+            const t = w.title;
+            if (!t) continue;
+            if (w.type && !['article', 'book-chapter', 'preprint'].includes(w.type)) continue;
+            const matched = (w.authorships || []).find(a => (a.author?.id || '').split('/').pop() === topId);
+            if (!matched) continue;
+            const insts = matched.institutions || [];
+            if (!insts.some(i => (i.id || '').split('/').pop() === instId)) continue;
+            const key = t.trim().toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            titles.push(t);
+            if (titles.length >= 100) break;
+        }
+        if (!titles.length) return null;
+        return { name: authorName, affiliation: instName, titles };
+    }
+
     async function fetchAuthorTitlesDirect(name, affiliation) {
         const { id: instId, name: instName } = await resolveInstitution(affiliation);
+
+        // Strategy 1 (only if affiliation given AND resolved): search works by
+        // (institution, raw author name). Catches authors whose OpenAlex profile
+        // doesn't list the institution but whose works do.
+        if (instId) {
+            try {
+                const r = await fetchAuthorTitlesByInstitution(name, instId, instName);
+                if (r) return r;
+            } catch { /* fall through to author search */ }
+        }
+
+        // Strategy 2: standard author search → filter by name → pick by affiliation/citations
         const affLower = (affiliation || '').toLowerCase();
         const aresp = await fetch(openalexUrl('/authors', { search: name, 'per-page': 10 }));
         if (!aresp.ok) throw new Error(`OpenAlex author search failed: ${aresp.status}`);
