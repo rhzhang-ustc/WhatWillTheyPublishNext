@@ -445,11 +445,10 @@
 <script>
 (function () {
     // ===== CONFIG =====
-    // After deploying the Cloudflare Worker (see worker/README.md), set
-    // this to its URL so visitors can use the app without their own key.
-    // Leave as null to require visitors to provide their own OpenAI key.
-    const WORKER_URL = null;
-    // Example: const WORKER_URL = "https://what-will-they-publish-next.your-handle.workers.dev";
+    // Cloudflare Worker that proxies OpenAI calls (see worker/README.md).
+    // Visitors don't need their own key; power users can override via the
+    // ⚙ dialog. Set to null to disable the shared backend.
+    const WORKER_URL = "https://what-will-they-publish-next.ruohanzhang15.workers.dev";
 
     // Title patterns (kept locally — these are structure, not data)
     const patterns = [
